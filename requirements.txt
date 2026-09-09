@@ -1,8 +1,10 @@
 # Core
 streamlit>=1.40
+# Optional: only needed for the paid Anthropic backend.
 anthropic>=0.40
 pypdf>=5.0
 pyyaml>=6.0
+requests>=2.31
 numpy>=1.26
 
 # Retrieval + verification

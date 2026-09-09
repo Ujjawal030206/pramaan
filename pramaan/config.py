@@ -45,8 +45,17 @@ CHUNK_MIN_CHARS = 120
 CHUNK_MAX_CHARS = 700
 
 # ---------------------------------------------------------------- drafting
-DRAFT_MODEL = os.getenv("PRAMAAN_DRAFT_MODEL", "claude-sonnet-5")
+# Which LLM writes the draft. "auto" picks whichever provider key is present:
+# groq / gemini (both have free tiers, no card) / openai-compatible /
+# anthropic, falling back to "extractive" if there is no key at all.
+# The gate does not care which model this is -- that is rather the point.
+DRAFT_PROVIDER = os.getenv("PRAMAAN_DRAFT_PROVIDER", "auto")
+# Empty means "use that provider's default", see drafter.DEFAULT_MODELS.
+DRAFT_MODEL = os.getenv("PRAMAAN_DRAFT_MODEL", "")
 DRAFT_MAX_TOKENS = 700
+
+# For any OpenAI-compatible endpoint: OpenRouter, a local Ollama, LM Studio.
+OPENAI_BASE_URL = os.getenv("PRAMAAN_OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 # ---------------------------------------------------------------- verification
 # The gate. A sentence survives only if some retrieved clause entails it with

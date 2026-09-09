@@ -132,45 +132,15 @@ class LLMVerifier:
     name = "llm"
 
     def __init__(self) -> None:
-        from .drafter import get_client
+        from .drafter import detect_provider
 
-        self.client = get_client()
+        if detect_provider() == "extractive":
+            raise RuntimeError("no LLM provider configured for the LLM verifier")
 
     def entailment_scores(self, premises: list[str], hypothesis: str) -> list[float]:
-        import json
+        from .drafter import judge_entailment
 
-        from .config import DRAFT_MODEL
-
-        if not premises:
-            return []
-        numbered = "\n\n".join(f"[{i}] {p}" for i, p in enumerate(premises))
-        msg = self.client.messages.create(
-            model=DRAFT_MODEL,
-            max_tokens=400,
-            system=(
-                "You judge textual entailment. For each numbered PREMISE, decide "
-                "whether it alone entails the CLAIM. Entailment means the premise "
-                "states or directly implies the claim. Topical overlap is not "
-                "entailment. Reply with JSON only: "
-                '{"scores": [{"i": 0, "p": 0.0}, ...]} where p is the probability '
-                "in [0,1] that the premise entails the claim."
-            ),
-            messages=[{
-                "role": "user",
-                "content": f"PREMISES:\n{numbered}\n\nCLAIM: {hypothesis}",
-            }],
-        )
-        raw = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        try:
-            data = json.loads(re.search(r"\{.*\}", raw, re.S).group(0))
-            out = [0.0] * len(premises)
-            for item in data.get("scores", []):
-                i = int(item["i"])
-                if 0 <= i < len(out):
-                    out[i] = float(item["p"])
-            return out
-        except Exception:
-            return [0.0] * len(premises)
+        return judge_entailment(premises, hypothesis)
 
 
 def make_verifier(backend: str = VERIFIER_BACKEND):

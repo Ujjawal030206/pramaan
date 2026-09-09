@@ -110,6 +110,27 @@ September may not be current in March.
 **To add a scheme:** add an entry to `sources.yaml`, then re-run
 `fetch_corpus.py` and `build_index.py`. No retraining. That is the scaling story.
 
+## Getting an LLM key (free)
+
+The drafter is a commodity and the gate does not care which model wrote the
+sentences it checks, so PRAMAAN takes whichever provider you can get:
+
+| Provider | Where | Cost |
+|---|---|---|
+| **Groq** (recommended) | console.groq.com/keys | free, no card, very fast |
+| **Google Gemini** | aistudio.google.com/apikey | free, no card |
+| OpenAI-compatible | OpenRouter free models, local Ollama, LM Studio | free |
+| Anthropic | console.anthropic.com | paid |
+
+Put one in `.env` and PRAMAAN detects it. Retrieval, citations and the
+verification gate are **all local and cost nothing** -- only drafting needs a
+provider.
+
+With no key at all the drafter falls back to `extractive`, answering with
+sentences copied verbatim from retrieved clauses. The app still runs and still
+cites, but be honest in a demo: an extractive draft is made of clause text, so
+the gate passes it by construction and is not being exercised.
+
 ## Running it
 
 Requires Python 3.11–3.13 (3.14 has no torch wheels yet).
@@ -119,7 +140,7 @@ python -m venv .venv
 .venv/Scripts/activate          # Windows;  source .venv/bin/activate on Unix
 pip install -r requirements.txt
 
-cp .env.example .env            # add your ANTHROPIC_API_KEY
+cp .env.example .env            # add a free GROQ_API_KEY (see below)
 
 python scripts/fetch_corpus.py  # downloads the 7 official documents
 python scripts/build_index.py   # extracts clauses, builds the index
@@ -151,7 +172,8 @@ environment variable.
 | `PRAMAAN_ENTAILMENT_THRESHOLD` | `0.5` | Higher = stricter gate, more abstention |
 | `PRAMAAN_VERIFIER_BACKEND` | `auto` | `nli` (local, measured) / `llm` (for small hosts) |
 | `PRAMAAN_MIN_SURVIVING_FRACTION` | `0.34` | Below this share surviving, abstain entirely |
-| `PRAMAAN_TOP_K` | `6` | Clauses retrieved per question |
+| `PRAMAAN_TOP_K` | `10` | Clauses retrieved per question |
+| `PRAMAAN_DRAFT_PROVIDER` | `auto` | `groq` / `gemini` / `openai` / `anthropic` / `extractive` |
 | `PRAMAAN_EMBED_MODEL` | multilingual MiniLM | Set to `all-MiniLM-L6-v2` for a smaller English-only build |
 
 ### Tuning the threshold
@@ -173,7 +195,7 @@ answer rate. Do not tune it on the demo questions you plan to show judges.
 2. On share.streamlit.io, point a new app at `app.py`.
 3. In **Settings → Secrets**, add:
    ```toml
-   ANTHROPIC_API_KEY = "sk-ant-..."
+   GROQ_API_KEY = "gsk_..."
    ```
 4. The free tier is memory-constrained. If the app is killed on boot, set
    `PRAMAAN_VERIFIER_BACKEND = "llm"` and
