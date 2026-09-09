@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 
 from .config import TOP_K
-from .drafter import draft_answer
+from .drafter import NO_EVIDENCE, draft_answer
 from .ingest import Clause
 from .retriever import Retriever
 from .verifier import VerificationResult, make_verifier, verify
@@ -86,6 +86,18 @@ class Pramaan:
             return Outcome(
                 question, ABSTAIN_MESSAGE, True, retrieved=retrieved,
                 elapsed=time.time() - t0, reason="empty draft",
+            )
+
+        # The drafter signals "the clauses do not settle this" with a sentinel
+        # rather than prose. Without it the model writes "the clauses do not
+        # address X", which is a sentence about our own retrieval -- and one
+        # that can pick up an entailment score and arrive at the user wearing a
+        # citation to an unrelated clause. Refusal must not be citable.
+        if draft.strip().upper().startswith(NO_EVIDENCE):
+            return Outcome(
+                question, ABSTAIN_MESSAGE, True, retrieved=retrieved,
+                draft=draft, elapsed=time.time() - t0,
+                reason="the drafter found nothing in the retrieved clauses that settles this",
             )
 
         # The gate gets the retriever too, so it can look for evidence the

@@ -31,25 +31,57 @@ from .config import (
 )
 from .ingest import Clause
 
+NO_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+
 SYSTEM = """You answer questions about Indian government welfare schemes for ordinary citizens.
 
 Rules you must follow:
 - Use ONLY the numbered clauses provided. They are verbatim extracts from official documents.
-- If the clauses do not settle the question, say so plainly in one sentence. Do not fill the gap.
+- If the clauses do not settle the question, reply with exactly INSUFFICIENT_EVIDENCE
+  and nothing else. Do not explain, do not hedge, do not partially answer.
 - Never invent figures, dates, age limits, income limits or scheme names.
 - Write short, complete, standalone sentences. Each sentence must carry one factual claim
   that a reader could check against a single clause.
 - No preamble, no greeting, no "based on the provided context". Start with the answer.
+- Never begin a sentence with "Yes" or "No". Write the rule itself as a plain
+  declarative statement: not "No, you are not eligible because X" but "Persons
+  who X are not eligible for the scheme."
+- Never write about the clauses themselves. "The clauses do not mention X" is a
+  forbidden sentence; use INSUFFICIENT_EVIDENCE instead.
 - Plain language. The reader may not have finished school.
 - 120 words maximum.
 """
 
+# Preference order per provider, best first. Groq retires models frequently --
+# a hardcoded name that works today returns 404 a month later, which surfaces
+# as the app abstaining on everything for no visible reason. So for Groq we ask
+# the account what it can actually serve and take the best available match.
 DEFAULT_MODELS = {
-    "groq": "llama-3.3-70b-versatile",
-    "gemini": "gemini-2.0-flash",
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-sonnet-5",
+    "groq": [
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b",
+        "groq/compound",
+    ],
+    "gemini": ["gemini-2.0-flash"],
+    "openai": ["gpt-4o-mini"],
+    "anthropic": ["claude-sonnet-5"],
 }
+
+_resolved: dict[str, str] = {}
+
+
+def _groq_available() -> list[str]:
+    import requests
+
+    r = requests.get(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
+        timeout=20,
+    )
+    r.raise_for_status()
+    return [m["id"] for m in r.json().get("data", [])]
 
 _TIMEOUT = 60
 
@@ -71,7 +103,21 @@ def detect_provider() -> str:
 
 
 def model_for(provider: str) -> str:
-    return DRAFT_MODEL or DEFAULT_MODELS.get(provider, "")
+    if DRAFT_MODEL:
+        return DRAFT_MODEL
+    if provider in _resolved:
+        return _resolved[provider]
+
+    prefs = DEFAULT_MODELS.get(provider, [])
+    chosen = prefs[0] if prefs else ""
+    if provider == "groq":
+        try:
+            available = set(_groq_available())
+            chosen = next((m for m in prefs if m in available), chosen)
+        except Exception:
+            pass  # offline or rate-limited: fall back to the first preference
+    _resolved[provider] = chosen
+    return chosen
 
 
 # ---------------------------------------------------------------- providers

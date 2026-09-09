@@ -73,6 +73,12 @@ ENTAILMENT_THRESHOLD = float(os.getenv("PRAMAAN_ENTAILMENT_THRESHOLD", "0.5"))
 # "llm"  -> entailment judged by the API, for hosts too small for torch
 # "auto" -> nli if torch is importable, else llm
 VERIFIER_BACKEND = os.getenv("PRAMAAN_VERIFIER_BACKEND", "auto")
+# Measured, see scripts/bench_verifier.py. distilroberta is 25x faster and
+# looked fine on clean hand-written premises (true >=0.766, false <=0.026), but
+# on the real retrieved clauses -- longer, OCR-scarred, full of clause numbering
+# -- it dropped below threshold on questions DeBERTa answers correctly, so the
+# app abstained on valid questions. A gate that refuses good questions is worse
+# than a slow one. Speed comes from NLI_CANDIDATES instead.
 NLI_MODEL = os.getenv("PRAMAAN_NLI_MODEL", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli")
 
 # If fewer than this fraction of drafted sentences survive, we treat the whole
@@ -82,6 +88,22 @@ MIN_SURVIVING_FRACTION = float(os.getenv("PRAMAAN_MIN_SURVIVING_FRACTION", "0.34
 # Clauses the gate retrieves for itself, per sentence, on top of whatever was
 # given to the drafter. Set to 0 to make the gate trust the drafting retrieval.
 VERIFY_TIME_K = int(os.getenv("PRAMAAN_VERIFY_TIME_K", "5"))
+
+# The cross-encoder costs ~2-3s per premise on CPU, so running it over every
+# retrieved clause made a single answer take 30-45s. Cheap embedding similarity
+# picks the few premises actually worth checking; the correct clause is nearly
+# always among the top handful, and anything that is not is not going to entail
+# the sentence anyway.
+NLI_CANDIDATES = int(os.getenv("PRAMAAN_NLI_CANDIDATES", "4"))
+# Clauses are <=700 chars (~175 tokens), so 512 just pays for padding.
+NLI_MAX_LENGTH = int(os.getenv("PRAMAAN_NLI_MAX_LENGTH", "256"))
+
+# Score each clause sentence-by-sentence instead of as one 550-char block.
+# This is the granularity finding from the SummaC paper we cite: a claim is
+# entailed by one sentence, and burying that sentence in a paragraph of clause
+# numbering and cross-references dilutes the signal. It is also markedly
+# cheaper, because attention cost grows with the square of sequence length.
+SENTENCE_LEVEL_PREMISES = os.getenv("PRAMAAN_SENTENCE_PREMISES", "0") not in ("0", "false", "False")
 
 # ---------------------------------------------------------------- speech
 ASR_MODEL = os.getenv("PRAMAAN_ASR_MODEL", "base")

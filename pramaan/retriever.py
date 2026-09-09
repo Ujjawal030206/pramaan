@@ -105,6 +105,24 @@ class Retriever:
         except Exception:
             self._faiss = None  # numpy fallback
 
+    def rank_against(self, text: str, clauses: list[Clause]) -> list[Clause]:
+        """Order `clauses` by embedding similarity to `text`, best first.
+
+        Used to decide which premises are worth handing to the cross-encoder.
+        Falls back to the given order when embeddings are unavailable.
+        """
+        if self.vectors is None or not clauses:
+            return list(clauses)
+        if not hasattr(self, "_row"):
+            self._row = {c.clause_id: i for i, c in enumerate(self.clauses)}
+        rows = [self._row.get(c.clause_id) for c in clauses]
+        if any(i is None for i in rows):
+            return list(clauses)
+        q = embed([text])[0]
+        sims = self.vectors[rows] @ q
+        order = np.argsort(-sims)
+        return [clauses[i] for i in order]
+
     @property
     def backend(self) -> str:
         if self.mode == "lexical":

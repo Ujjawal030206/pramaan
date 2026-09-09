@@ -11,13 +11,17 @@ a prompt can be talked out of; a threshold cannot.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 
 from .config import (
     ENTAILMENT_THRESHOLD,
     MIN_SURVIVING_FRACTION,
+    NLI_CANDIDATES,
+    NLI_MAX_LENGTH,
     NLI_MODEL,
+    SENTENCE_LEVEL_PREMISES,
     VERIFIER_BACKEND,
     VERIFY_TIME_K,
 )
@@ -95,6 +99,12 @@ class NLIVerifier:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         self.torch = torch
+        # Default thread count is often 1 in a Streamlit worker, which triples
+        # inference time on a multi-core box for no reason.
+        try:
+            torch.set_num_threads(max(1, (os.cpu_count() or 2)))
+        except Exception:
+            pass
         self.tok = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
         self.model.eval()
@@ -114,7 +124,7 @@ class NLIVerifier:
         with self.torch.no_grad():
             batch = self.tok(
                 premises, [hypothesis] * len(premises),
-                return_tensors="pt", truncation=True, padding=True, max_length=512,
+                return_tensors="pt", truncation=True, padding=True, max_length=NLI_MAX_LENGTH,
             )
             logits = self.model(**batch).logits
             probs = self.torch.softmax(logits, dim=-1)
@@ -194,10 +204,33 @@ def verify(
             except Exception:
                 pass  # a retrieval failure must not break the gate
 
-        scores = verifier.entailment_scores([c.text for c in pool], sentence)
+        # Cascade: narrow with cheap similarity, then pay for the cross-encoder.
+        if retriever is not None and len(pool) > NLI_CANDIDATES:
+            try:
+                pool = retriever.rank_against(sentence, pool)[:NLI_CANDIDATES]
+            except Exception:
+                pool = pool[:NLI_CANDIDATES]
+
+        if SENTENCE_LEVEL_PREMISES:
+            premises, owners = [], []
+            for clause_obj in pool:
+                parts = split_sentences(clause_obj.text) or [clause_obj.text]
+                for part in parts[:8]:
+                    if len(part) < 25:
+                        continue        # numbering fragments entail nothing
+                    premises.append(part)
+                    owners.append(clause_obj)
+            if not premises:
+                premises = [c.text for c in pool]
+                owners = list(pool)
+        else:
+            premises = [c.text for c in pool]
+            owners = list(pool)
+
+        scores = verifier.entailment_scores(premises, sentence)
         if scores:
             best = max(range(len(scores)), key=lambda i: scores[i])
-            score, clause = scores[best], pool[best]
+            score, clause = scores[best], owners[best]
         else:
             score, clause = 0.0, None
         result.verdicts.append(
