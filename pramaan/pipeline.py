@@ -88,7 +88,9 @@ class Pramaan:
                 elapsed=time.time() - t0, reason="empty draft",
             )
 
-        result = verify(draft, clauses, verifier=self.verifier)
+        # The gate gets the retriever too, so it can look for evidence the
+        # drafting query missed rather than deleting true sentences.
+        result = verify(draft, clauses, verifier=self.verifier, retriever=self.retriever)
         if result.abstained:
             return Outcome(
                 question, ABSTAIN_MESSAGE, True, retrieved=retrieved,

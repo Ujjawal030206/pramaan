@@ -11,7 +11,15 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import EMBED_MODEL, INDEX_DIR, TOP_K
+from .bm25 import BM25, rrf
+from .config import (
+    BM25_WEIGHT,
+    EMBED_MODEL,
+    HYBRID_RETRIEVAL,
+    INDEX_DIR,
+    RRF_DEPTH_MULTIPLIER,
+    TOP_K,
+)
 from .ingest import Clause, load_clauses
 
 CLAUSES_FILE = INDEX_DIR / "clauses.jsonl"
@@ -59,6 +67,9 @@ class Retriever:
             )
         self.clauses = load_clauses(CLAUSES_FILE)
         self.vectors = np.load(VECTORS_FILE)
+        # Cheap enough to rebuild at load (a few hundred clauses) that it is not
+        # worth another artefact on disk to keep in sync with the vectors.
+        self._bm25 = BM25([c.text for c in self.clauses])
         self._faiss = None
         try:
             import faiss  # noqa: F401
@@ -72,13 +83,36 @@ class Retriever:
     def backend(self) -> str:
         return "faiss" if self._faiss is not None else "numpy"
 
-    def search(self, query: str, k: int = TOP_K) -> list[tuple[Clause, float]]:
+    def dense_ranking(self, query: str, depth: int) -> tuple[list[int], np.ndarray]:
         q = embed([query])
         if self._faiss is not None:
-            scores, idx = self._faiss.search(q, k)
-            pairs = zip(idx[0].tolist(), scores[0].tolist())
+            scores, idx = self._faiss.search(q, min(depth, len(self.clauses)))
+            order = [i for i in idx[0].tolist() if i >= 0]
+            sims = np.zeros(len(self.clauses), dtype="float32")
+            for i, s in zip(idx[0].tolist(), scores[0].tolist()):
+                if i >= 0:
+                    sims[i] = s
         else:
-            sims = (self.vectors @ q[0])
-            top = np.argsort(-sims)[:k]
-            pairs = ((int(i), float(sims[i])) for i in top)
-        return [(self.clauses[i], float(s)) for i, s in pairs if i >= 0]
+            sims = self.vectors @ q[0]
+            order = np.argsort(-sims)[:depth].tolist()
+        return order, sims
+
+    def search(self, query: str, k: int = TOP_K) -> list[tuple[Clause, float]]:
+        """Hybrid dense + BM25, fused with RRF.
+
+        Returned score is the dense cosine similarity, kept because it is the
+        interpretable one to show a user; ordering comes from the fusion.
+        """
+        depth = max(k * RRF_DEPTH_MULTIPLIER, 30)
+        dense_order, sims = self.dense_ranking(query, depth)
+
+        if not HYBRID_RETRIEVAL:
+            return [(self.clauses[i], float(sims[i])) for i in dense_order[:k]]
+
+        lex = self._bm25.scores(query)
+        lex_order = [
+            i for i in sorted(range(len(lex)), key=lambda j: -lex[j])[:depth]
+            if lex[i] > 0
+        ]
+        fused = rrf([dense_order, lex_order], weights=[1.0, BM25_WEIGHT])
+        return [(self.clauses[i], float(sims[i])) for i, _ in fused[:k]]

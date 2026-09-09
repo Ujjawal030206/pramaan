@@ -205,6 +205,40 @@ eval/
 tests/
 ```
 
+## What we measured, and what it cost us
+
+Three findings from building this, all of which changed the design:
+
+**1. Chunking decided everything.** Our first version chunked page by page and
+merged paragraphs freely. That glued clause 10.1 ("The financial benefit of
+Rs.6000/- per year ... in three installments") onto the end of a paragraph about
+nodal officers submitting lists. The resulting embedding was about nodal
+officers, so the benefit clause ranked **29th of 246** for "How much money do I
+get under PM-KISAN?" — effectively unfindable. Chunking on clause boundaries
+instead fixed it.
+
+**2. List items are meaningless without their stem.** "All Persons who paid
+Income Tax in last assessment year" is a noun phrase, not a rule. The sentence
+that makes it a rule — "4.1 The following categories ... shall not be eligible"
+— sits above the list and, in this document, on the previous page. Chunking per
+page stranded the item; attaching the stem took its entailment score from
+**0.026 to 0.872**.
+
+**3. Dense retrieval alone misses literal terms.** Eligibility turns on exact
+tokens. A dense-only retriever ranked the income-tax exclusion **35th** for a
+question that quoted the phrase "income tax". Adding BM25 and fusing with RRF:
+
+| retriever | recall@6 | MRR |
+|---|---|---|
+| dense only | 70% | 0.485 |
+| dense + BM25 (RRF) | **80%** | **0.663** |
+
+Reproduce with `python scripts/bench_retrieval.py`. The two remaining probe
+misses land at ranks 9 and 10, which is why `TOP_K` is 10 rather than 6.
+
+The gate itself, measured on real clause text by `tests/test_gate_nli.py`:
+supported claims score **0.95–0.99**, fabricated ones **0.00–0.01**.
+
 ## Honest limitations
 
 - **Retrieval is the ceiling.** If the right clause is not retrieved, we abstain.
@@ -213,6 +247,15 @@ tests/
 - **Entailment is not correctness.** A clause can entail a sentence that is
   nonetheless a bad answer to the question asked. The gate catches fabrication,
   not irrelevance.
+- **The gate is not infallible.** Probing it, we found a PM-KMY clause about
+  social-security overlap scoring 0.557 for a claim about institutional land
+  holders — a false positive above threshold. It lost to the correct clause at
+  0.958 and so did no harm, but it is there. The threshold is a dial, not a
+  proof.
+- **Source PDF quality varies.** The PM-KISAN FAQ is scanned and OCR-damaged
+  ("lncome Tax", "su pe ran n uated"). We do not repair source text, because
+  editing a document we are citing would defeat the point; those passages
+  simply retrieve less well.
 - **English-dominant corpus.** Query-side Hindi works via the multilingual
   encoder, but most source text is English, so Hindi answers are weaker.
 - **Five schemes.** This is a prototype corpus, not coverage of the thousands of

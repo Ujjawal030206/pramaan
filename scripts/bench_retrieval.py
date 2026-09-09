@@ -44,29 +44,20 @@ PREFIX = {
 }
 
 
-def evaluate(model_name: str, clauses, k: int = 6):
-    from sentence_transformers import SentenceTransformer
+def _rank_of(order, clauses, needle):
+    for pos, idx in enumerate(order, 1):
+        if needle.lower() in clauses[idx].text.lower():
+            return pos
+    return None
 
-    qp, pp = PREFIX.get(model_name, ("", ""))
-    model = SentenceTransformer(model_name)
-    corpus = model.encode(
-        [pp + c.text for c in clauses], batch_size=64, convert_to_numpy=True,
-        normalize_embeddings=True,
-    )
-    hits, rr = 0, []
-    misses = []
-    for question, needle in PROBES:
-        qv = model.encode([qp + question], convert_to_numpy=True,
-                          normalize_embeddings=True)[0]
-        order = np.argsort(-(corpus @ qv))
-        rank = None
-        for pos, idx in enumerate(order, 1):
-            if needle.lower() in clauses[idx].text.lower():
-                rank = pos
-                break
+
+def _score(orders, clauses, k):
+    hits, rr, misses = 0, [], []
+    for (question, needle), order in zip(PROBES, orders):
+        rank = _rank_of(order, clauses, needle)
         if rank is None:
             rr.append(0.0)
-            misses.append((question, "not found at all"))
+            misses.append((question, "not found"))
             continue
         rr.append(1.0 / rank)
         if rank <= k:
@@ -76,30 +67,63 @@ def evaluate(model_name: str, clauses, k: int = 6):
     return hits / len(PROBES), float(np.mean(rr)), misses
 
 
+def evaluate(model_name: str, clauses, k: int = 6):
+    """Returns (dense_result, hybrid_result), each (recall@k, MRR, misses)."""
+    from sentence_transformers import SentenceTransformer
+
+    from pramaan.bm25 import BM25, rrf
+
+    qp, pp = PREFIX.get(model_name, ("", ""))
+    model = SentenceTransformer(model_name)
+    corpus = model.encode(
+        [pp + c.text for c in clauses], batch_size=64, convert_to_numpy=True,
+        normalize_embeddings=True,
+    )
+    bm25 = BM25([c.text for c in clauses])
+    depth = 60
+
+    dense_orders, hybrid_orders = [], []
+    for question, _ in PROBES:
+        qv = model.encode([qp + question], convert_to_numpy=True,
+                          normalize_embeddings=True)[0]
+        d_order = np.argsort(-(corpus @ qv)).tolist()
+        dense_orders.append(d_order)
+
+        lex = bm25.scores(question)
+        l_order = [i for i in sorted(range(len(lex)), key=lambda j: -lex[j])[:depth]
+                   if lex[i] > 0]
+        fused = [i for i, _ in rrf([d_order[:depth], l_order])]
+        hybrid_orders.append(fused)
+
+    return _score(dense_orders, clauses, k), _score(hybrid_orders, clauses, k)
+
+
 def main() -> int:
     print("Extracting clauses...\n")
     clauses = build_clause_set()
     print(f"\n{len(clauses)} clauses\n")
-    print(f"{'model':<58} {'recall@6':>9} {'MRR':>7}")
-    print("-" * 76)
+    print(f"{'model':<56} {'dense R@6':>10} {'hybrid R@6':>11} {'hybrid MRR':>11}")
+    print("-" * 90)
     results = []
     for name in CANDIDATES:
         try:
-            recall, mrr, misses = evaluate(name, clauses)
+            dense, hybrid = evaluate(name, clauses)
         except Exception as exc:
-            print(f"{name:<58}  FAILED {type(exc).__name__}: {exc}")
+            print(f"{name:<56}  FAILED {type(exc).__name__}: {exc}")
             continue
-        results.append((recall, mrr, name, misses))
-        print(f"{name:<58} {recall:>8.0%} {mrr:>7.3f}")
+        results.append((hybrid[0], hybrid[1], name, hybrid[2]))
+        print(f"{name:<56} {dense[0]:>9.0%} {hybrid[0]:>10.0%} {hybrid[1]:>11.3f}")
 
     if results:
         results.sort(reverse=True)
         best = results[0]
-        print(f"\nBest: {best[2]}  (recall@6 {best[0]:.0%}, MRR {best[1]:.3f})")
+        print(f"\nBest: {best[2]}  hybrid recall@6 {best[0]:.0%}, MRR {best[1]:.3f}")
         if best[3]:
             print("Still missed:")
             for q, why in best[3]:
-                print(f"  - {why:<18} {q}")
+                print(f"  - {why:<14} {q}")
+        else:
+            print("No misses on the probe set.")
     return 0
 
 

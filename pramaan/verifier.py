@@ -19,6 +19,7 @@ from .config import (
     MIN_SURVIVING_FRACTION,
     NLI_MODEL,
     VERIFIER_BACKEND,
+    VERIFY_TIME_K,
 )
 from .ingest import Clause
 
@@ -191,16 +192,42 @@ def verify(
     verifier=None,
     threshold: float = ENTAILMENT_THRESHOLD,
     min_surviving: float = MIN_SURVIVING_FRACTION,
+    retriever=None,
+    verify_k: int = VERIFY_TIME_K,
 ) -> VerificationResult:
+    """Check each sentence of `draft` against the evidence.
+
+    If a `retriever` is supplied, the gate does not simply trust the clauses
+    that were handed to the drafter -- it runs its own retrieval per sentence
+    and adds what it finds to the premise pool.
+
+    This matters for compound questions. Asked "what do I get under PM-KISAN
+    and who is left out", a single query embedding retrieves the benefit
+    clauses and misses the exclusion list, so a perfectly true sentence about
+    income-tax payers gets deleted for want of evidence that exists in the
+    corpus. Retrieving per sentence, at the granularity the check actually
+    operates on, fixes that. It can only ever add support; a fabricated
+    sentence still finds nothing to entail it.
+    """
     verifier = verifier or make_verifier()
-    premises = [c.text for c in clauses]
     result = VerificationResult(backend=verifier.name)
 
     for sentence in split_sentences(draft):
-        scores = verifier.entailment_scores(premises, sentence)
+        pool = list(clauses)
+        if retriever is not None and verify_k:
+            seen = {c.clause_id for c in pool}
+            try:
+                for extra, _ in retriever.search(sentence, k=verify_k):
+                    if extra.clause_id not in seen:
+                        seen.add(extra.clause_id)
+                        pool.append(extra)
+            except Exception:
+                pass  # a retrieval failure must not break the gate
+
+        scores = verifier.entailment_scores([c.text for c in pool], sentence)
         if scores:
             best = max(range(len(scores)), key=lambda i: scores[i])
-            score, clause = scores[best], clauses[best]
+            score, clause = scores[best], pool[best]
         else:
             score, clause = 0.0, None
         result.verdicts.append(

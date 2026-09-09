@@ -106,30 +106,81 @@ def _split_long(text: str) -> list[str]:
     return out
 
 
-def _pack(paras: list[str]) -> list[str]:
-    """Group paragraphs into clause-aligned chunks.
+# An enumerated list ITEM -- "(a)", "iv)", "v)". Distinct from a section number
+# like "5.2", because a list item is meaningless without the stem that
+# introduces it, whereas a numbered section is self-contained.
+_LIST_ITEM = re.compile(
+    r"^\s*\(?\s*(?:[a-z]|[ivxlc]{1,4})\s*[).]\s+", re.IGNORECASE
+)
 
-    A new chunk starts at a clause number, unless what we have so far is still
-    too short to stand alone -- that case is usually a section heading, which
-    belongs with the clause that follows it rather than on its own.
+# A numbered section like "5.2" or "10.1.3" -- self-contained, and its arrival
+# means any list we were inside has finished.
+_SECTION_NUM = re.compile(r"^\s*\d+(?:\.\d+)*[.)]?\s+")
+
+
+def _pack(paras: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """Group (paragraph, page) pairs into clause-aligned chunks.
+
+    Two things this has to get right, both learned the hard way:
+
+    1. Chunk across page boundaries. The PM-KISAN exclusion list introduces
+       itself on page 2 and runs to page 3; chunking per page left "v) All
+       Persons who paid Income Tax in last assessment year" stranded with no
+       stem, so it entailed nothing and a true sentence about income-tax payers
+       was deleted from the answer.
+    2. Carry the stem onto list items. "All Persons who paid Income Tax in last
+       assessment year" is a noun phrase. Only with "The following categories
+       shall not be eligible for benefit" in front of it does it state a rule.
+
+    Chunks are tagged with the page their first paragraph came from, which is
+    what the citation shows.
     """
-    packed: list[str] = []
-    buf = ""
-    for p in paras:
-        starts_clause = bool(_CLAUSE_START.match(p))
-        too_big = buf and len(buf) + len(p) + 1 > CHUNK_MAX_CHARS
-        if buf and (too_big or (starts_clause and len(buf) >= CHUNK_MIN_CHARS)):
-            packed.append(buf)
-            buf = p
-        else:
-            buf = (buf + " " + p).strip() if buf else p
-    if buf:
-        packed.append(buf)
+    packed: list[tuple[str, int]] = []
+    buf, buf_page = "", 0
+    stems: list[str] = []
 
-    out: list[str] = []
-    for chunk in packed:
-        out.extend(_split_long(chunk) if len(chunk) > CHUNK_MAX_CHARS else [chunk])
-    return [c for c in out if len(c) >= 60]
+    for text, page in paras:
+        stripped = text.rstrip()
+        is_item = bool(_LIST_ITEM.match(text))
+
+        # A stem is a paragraph that ends in a colon -- that is exactly how
+        # these documents introduce a list. We keep the two most recent so a
+        # nested item inherits both levels: "4.1 The following categories ...
+        # shall not be eligible ...:" plus "(b) Farmer families ...:".
+        if stripped.endswith(":"):
+            stems.append(stripped)
+            del stems[:-2]
+        elif _SECTION_NUM.match(text) and not is_item:
+            stems.clear()  # a new numbered section means the list has ended
+
+        starts_clause = bool(_CLAUSE_START.match(text))
+        too_big = buf and len(buf) + len(text) + 1 > CHUNK_MAX_CHARS
+        if buf and (too_big or (starts_clause and len(buf) >= CHUNK_MIN_CHARS)):
+            packed.append((buf, buf_page))
+            # Guard against duplicating the stem inside the NEW chunk only. An
+            # earlier version tested the chunk being closed, which meant the
+            # first item of every list -- the one directly after its stem --
+            # was the one item that never got the stem attached.
+            prefix = " ".join(stems)
+            if is_item and prefix and not text.startswith(prefix[:40]):
+                buf, buf_page = f"{prefix} {text}", page
+            else:
+                buf, buf_page = text, page
+        elif buf:
+            buf = f"{buf} {text}"
+        else:
+            buf, buf_page = text, page
+
+    if buf:
+        packed.append((buf, buf_page))
+
+    out: list[tuple[str, int]] = []
+    for chunk, page in packed:
+        if len(chunk) > CHUNK_MAX_CHARS:
+            out.extend((piece, page) for piece in _split_long(chunk))
+        else:
+            out.append((chunk, page))
+    return [(c, p) for c, p in out if len(c) >= 60]
 
 
 def load_manifest() -> list[dict]:
@@ -141,26 +192,35 @@ def extract_clauses(entry: dict, pdf_path: Path) -> list[Clause]:
     from pypdf import PdfReader
 
     reader = PdfReader(str(pdf_path))
-    out: list[Clause] = []
+
+    # Flatten the whole document into a paragraph stream first. Clauses and
+    # lists routinely straddle a page break, and chunking per page cuts them.
+    stream: list[tuple[str, int]] = []
     for pageno, page in enumerate(reader.pages, start=1):
         try:
             raw = page.extract_text() or ""
         except Exception:
             continue
-        for i, chunk in enumerate(_pack(_page_paragraphs(raw))):
-            out.append(
-                Clause(
-                    clause_id=f"{entry['id']}#p{pageno}c{i}",
-                    text=chunk,
-                    scheme=entry["scheme"],
-                    doc_id=entry["id"],
-                    doc_title=entry["title"],
-                    authority=entry["authority"],
-                    url=entry["url"],
-                    page=pageno,
-                    retrieved=entry.get("retrieved", ""),
-                )
+        stream.extend((para, pageno) for para in _page_paragraphs(raw))
+
+    out: list[Clause] = []
+    per_page: dict[int, int] = {}
+    for chunk, pageno in _pack(stream):
+        i = per_page.get(pageno, 0)
+        per_page[pageno] = i + 1
+        out.append(
+            Clause(
+                clause_id=f"{entry['id']}#p{pageno}c{i}",
+                text=chunk,
+                scheme=entry["scheme"],
+                doc_id=entry["id"],
+                doc_title=entry["title"],
+                authority=entry["authority"],
+                url=entry["url"],
+                page=pageno,
+                retrieved=entry.get("retrieved", ""),
             )
+        )
     return out
 
 

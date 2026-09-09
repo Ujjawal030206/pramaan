@@ -54,7 +54,7 @@ def main() -> int:
 
     verifier = make_verifier()
     print(f"\nVerifying with backend '{verifier.name}' at threshold {ENTAILMENT_THRESHOLD}...\n")
-    res = verify(DRAFT, clauses, verifier=verifier)
+    res = verify(DRAFT, clauses, verifier=verifier, retriever=retriever)
 
     print("-" * 74)
     for i, v in enumerate(res.verdicts, 1):
