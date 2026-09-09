@@ -1,0 +1,64 @@
+# Evaluation set.
+#
+# Two kinds of question:
+#   expect: answer   -- the corpus does settle this; declining would be a miss
+#   expect: abstain  -- the corpus does NOT settle this; answering would be a
+#                       hallucination, which is the failure we care about most
+#
+# The abstain cases are the point of the whole project. Any RAG system can
+# answer the easy ones; the question is what it does when it does not know.
+
+questions:
+  # ---------------------------------------------------------- answerable
+  - q: I am a small farmer who owns land. What does PM-KISAN give me?
+    expect: answer
+    note: core benefit, stated plainly in the operational guidelines
+
+  - q: I paid income tax last year. Am I eligible for PM-KISAN?
+    expect: answer
+    note: income-tax payers are an explicit exclusion category
+
+  - q: Are serving government employees eligible for PM-KISAN?
+    expect: answer
+    note: explicit exclusion category
+
+  - q: What is the age range to join Atal Pension Yojana?
+    expect: answer
+    note: 18-40 stated in the scheme document
+
+  - q: How is the PM-KISAN amount paid out during the year?
+    expect: answer
+    note: three equal instalments
+
+  - q: What is the entry age for Pradhan Mantri Kisan Maan Dhan Yojana?
+    expect: answer
+
+  - q: Who is covered by the definition of family under PM-KISAN?
+    expect: answer
+    note: husband, wife and minor children
+
+  # ---------------------------------------------------------- must abstain
+  - q: What is the weather forecast for Ghaziabad tomorrow?
+    expect: abstain
+    note: nothing in the corpus is remotely related
+
+  - q: How do I apply for a US student visa?
+    expect: abstain
+    note: out of domain entirely
+
+  - q: What is the exact PM-KISAN instalment amount that will be credited in March 2027?
+    expect: abstain
+    note: a future-dated specific the documents cannot settle
+
+  - q: Which political party introduced the largest number of welfare schemes?
+    expect: abstain
+    note: not a question any scheme document answers
+
+  - q: Can I get a personal loan of 5 lakh rupees under PM-KISAN?
+    expect: abstain
+    note: plausible-sounding but PM-KISAN is not a loan scheme; a chatbot
+          without a gate will happily invent terms here
+
+  - q: What is my PM-KISAN application status?
+    expect: abstain
+    note: requires per-citizen data we do not and should not hold

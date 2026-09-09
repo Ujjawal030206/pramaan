@@ -1,0 +1,43 @@
+documents:
+- id: pmkisan-og
+  scheme: PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)
+  title: Revised PM-KISAN Operational Guidelines (English)
+  authority: Department of Agriculture & Farmers Welfare, Ministry of Agriculture
+  url: https://pmkisan.gov.in/Documents/RevisedPM-KISANOperationalGuidelines(English).pdf
+  retrieved: '2026-09-09'
+- id: pmkisan-faq
+  scheme: PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)
+  title: PM-KISAN Revised Frequently Asked Questions
+  authority: Department of Agriculture & Farmers Welfare, Ministry of Agriculture
+  url: https://pmkisan.gov.in/Documents/RevisedFAQ.pdf
+  retrieved: '2026-09-09'
+- id: pmkisan-clarif
+  scheme: PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)
+  title: Clarifications relating to Clauses 3.3 and 3.4 of the Operational Guidelines
+  authority: Department of Agriculture & Farmers Welfare, Ministry of Agriculture
+  url: https://fw.pmkisan.gov.in/Documents/ClarificationsrelatingtoClauses.PDF
+  retrieved: '2026-09-09'
+- id: pmkmy-og
+  scheme: PM-KMY (Pradhan Mantri Kisan Maan Dhan Yojana)
+  title: PM-KMY Operational Guidelines
+  authority: Department of Agriculture & Farmers Welfare, Ministry of Agriculture
+  url: https://pmkisan.gov.in/Documents/PM-KMY%20-%20Operational%20Guidelines.pdf
+  retrieved: '2026-09-09'
+- id: apy-scheme
+  scheme: APY (Atal Pension Yojana)
+  title: Atal Pension Yojana - Details of the Scheme
+  authority: Department of Financial Services, Ministry of Finance
+  url: https://jansuraksha.gov.in/Files/APY/ENGLISH/APY.pdf
+  retrieved: '2026-09-09'
+- id: pmjjby-rules
+  scheme: PMJJBY (Pradhan Mantri Jeevan Jyoti Bima Yojana)
+  title: PMJJBY Rules
+  authority: Department of Financial Services, Ministry of Finance
+  url: https://jansuraksha.gov.in/Files/PMJJBY/English/Rules.pdf
+  retrieved: '2026-09-09'
+- id: pmsby-rules
+  scheme: PMSBY (Pradhan Mantri Suraksha Bima Yojana)
+  title: PMSBY Rules
+  authority: Department of Financial Services, Ministry of Finance
+  url: https://jansuraksha.gov.in/Files/PMSBY/English/Rules.pdf
+  retrieved: '2026-09-09'
