@@ -31,7 +31,12 @@ TOP_K = int(os.getenv("PRAMAAN_TOP_K", "10"))
 # "18 to 40" -- and a dense-only retriever benchmarked here ranked the PM-KISAN
 # income-tax exclusion 35th for a question that quoted the phrase. BM25 fixes
 # exactly that class of miss, so we fuse both rankings with RRF.
-HYBRID_RETRIEVAL = os.getenv("PRAMAAN_HYBRID", "1") not in ("0", "false", "False")
+# "hybrid" dense+BM25 (best), "dense", or "lexical" -- BM25 only, which needs
+# no torch and no encoder at all. Lexical mode exists so the app can be hosted
+# on a free tier too small to hold torch plus two transformer models; it is
+# measurably worse, and the sidebar says so.
+RETRIEVAL_MODE = os.getenv("PRAMAAN_RETRIEVAL_MODE", "hybrid")
+HYBRID_RETRIEVAL = RETRIEVAL_MODE == "hybrid"
 BM25_WEIGHT = float(os.getenv("PRAMAAN_BM25_WEIGHT", "1.0"))
 RRF_DEPTH_MULTIPLIER = int(os.getenv("PRAMAAN_RRF_DEPTH", "10"))
 

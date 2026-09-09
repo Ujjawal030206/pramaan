@@ -17,6 +17,7 @@ from .config import (
     EMBED_MODEL,
     HYBRID_RETRIEVAL,
     INDEX_DIR,
+    RETRIEVAL_MODE,
     RRF_DEPTH_MULTIPLIER,
     TOP_K,
 )
@@ -61,11 +62,36 @@ def build_index(clauses: list[Clause]) -> None:
 
 class Retriever:
     def __init__(self) -> None:
-        if not VECTORS_FILE.exists():
+        if not CLAUSES_FILE.exists():
             raise FileNotFoundError(
                 "No index found. Run:  python scripts/build_index.py"
             )
         self.clauses = load_clauses(CLAUSES_FILE)
+        self.mode = RETRIEVAL_MODE
+
+        if self.mode == "lexical":
+            # No vectors, no encoder, no torch.
+            self.vectors = None
+            self._bm25 = BM25([c.text for c in self.clauses])
+            self._faiss = None
+            return
+
+        if not VECTORS_FILE.exists():
+            raise FileNotFoundError(
+                "No vectors found. Run scripts/build_index.py, or set "
+                "PRAMAAN_RETRIEVAL_MODE=lexical to run without embeddings."
+            )
+        # The vectors were produced by one specific encoder. Loading them with a
+        # different one yields plausible-looking numbers and silently wrong
+        # retrieval, which for this project is the worst possible failure.
+        if META_FILE.exists():
+            built_with = json.loads(META_FILE.read_text(encoding="utf-8")).get("model")
+            if built_with and built_with != EMBED_MODEL:
+                raise RuntimeError(
+                    f"Index was built with {built_with!r} but PRAMAAN_EMBED_MODEL is "
+                    f"{EMBED_MODEL!r}. Rebuild with scripts/build_index.py, or unset "
+                    "the override. Mixing encoders silently corrupts retrieval."
+                )
         self.vectors = np.load(VECTORS_FILE)
         # Cheap enough to rebuild at load (a few hundred clauses) that it is not
         # worth another artefact on disk to keep in sync with the vectors.
@@ -81,7 +107,9 @@ class Retriever:
 
     @property
     def backend(self) -> str:
-        return "faiss" if self._faiss is not None else "numpy"
+        if self.mode == "lexical":
+            return "bm25-only"
+        return ("faiss" if self._faiss is not None else "numpy") + f"+{self.mode}"
 
     def dense_ranking(self, query: str, depth: int) -> tuple[list[int], np.ndarray]:
         q = embed([query])
@@ -104,6 +132,13 @@ class Retriever:
         interpretable one to show a user; ordering comes from the fusion.
         """
         depth = max(k * RRF_DEPTH_MULTIPLIER, 30)
+
+        if self.mode == "lexical":
+            lex = self._bm25.scores(query)
+            top = sorted(range(len(lex)), key=lambda j: -lex[j])[:k]
+            hi = max(lex) or 1.0
+            return [(self.clauses[i], lex[i] / hi) for i in top if lex[i] > 0]
+
         dense_order, sims = self.dense_ranking(query, depth)
 
         if not HYBRID_RETRIEVAL:

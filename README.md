@@ -207,11 +207,21 @@ answer rate. Do not tune it on the demo questions you plan to show judges.
    ```toml
    GROQ_API_KEY = "gsk_..."
    ```
-4. The free tier is memory-constrained. If the app is killed on boot, set
-   `PRAMAAN_VERIFIER_BACKEND = "llm"` and
-   `PRAMAAN_EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"` in the same
-   Secrets panel — the gate still runs, it is just judged by the API instead of
-   a local encoder.
+4. **The free tier is ~1 GB and will probably not hold torch plus two
+   transformer models.** If the app is killed on boot, rename
+   `requirements-cloud.txt` to `requirements.txt` and add to Secrets:
+   ```toml
+   PRAMAAN_RETRIEVAL_MODE = "lexical"
+   PRAMAAN_VERIFIER_BACKEND = "llm"
+   ```
+   That drops the encoder and the local NLI model entirely: retrieval becomes
+   BM25-only and the gate is judged by the LLM. Both are measurably worse than
+   the full stack, so demo locally if you can and say plainly which mode the
+   hosted version is running.
+
+   Do **not** just change `PRAMAAN_EMBED_MODEL` to something smaller — the
+   committed vectors were built with one specific encoder, and mixing them
+   silently corrupts retrieval. The retriever now refuses to start if you try.
 
 Note that `index/` and `corpus/raw/` are gitignored. Either commit the built
 index, or add a first-run hook that calls the two scripts.

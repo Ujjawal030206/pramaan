@@ -1,0 +1,15 @@
+# Lightweight deployment for a free host that cannot hold torch plus two
+# transformer models (Streamlit Community Cloud is ~1 GB).
+#
+# Retrieval falls back to BM25 only and the gate is judged by the LLM instead of
+# the local NLI model. Both are measurably worse than the full stack -- use
+# requirements.txt anywhere with real memory. Set these in Secrets:
+#
+#   PRAMAAN_RETRIEVAL_MODE  = "lexical"
+#   PRAMAAN_VERIFIER_BACKEND = "llm"
+#   GROQ_API_KEY             = "gsk_..."
+streamlit>=1.40
+requests>=2.31
+pyyaml>=6.0
+numpy>=1.26
+pypdf>=5.0
