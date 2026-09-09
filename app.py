@@ -11,9 +11,21 @@ import tempfile
 
 import streamlit as st
 
-from pramaan import asr
-from pramaan.config import ENTAILMENT_THRESHOLD, TOP_K
-from pramaan.pipeline import Pramaan
+# Streamlit Community Cloud supplies secrets through st.secrets, not the
+# environment, so copy them across BEFORE pramaan is imported -- config.py
+# reads os.getenv at import time. Existing env vars win, and a missing secrets
+# file is normal when running locally off a .env.
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:
+    pass
+
+from pramaan import asr  # noqa: E402
+from pramaan.config import ENTAILMENT_THRESHOLD, TOP_K  # noqa: E402
+from pramaan.drafter import detect_provider, model_for  # noqa: E402
+from pramaan.pipeline import Pramaan  # noqa: E402
 
 st.set_page_config(page_title="PRAMAAN", page_icon="🪔", layout="wide")
 
@@ -54,6 +66,16 @@ def sidebar():
             st.caption(f"Retrieval: {eng.retriever.backend} · top-{TOP_K}")
             st.caption(f"Verifier: {eng.verifier.name}")
             st.caption(f"Entailment threshold: {ENTAILMENT_THRESHOLD}")
+            provider = detect_provider()
+            if provider == "extractive":
+                st.warning(
+                    "No LLM key found, so answers are **extractive** (sentences "
+                    "copied from clauses). The app works, but the gate is not "
+                    "being exercised. Add a free GROQ_API_KEY to see it work.",
+                    icon="⚠️",
+                )
+            else:
+                st.caption(f"Drafter: {provider} · {model_for(provider)}")
         except Exception:
             st.caption("Index not built yet.")
         st.divider()
@@ -175,9 +197,9 @@ def main():
         except Exception as exc:
             st.error(
                 f"Could not start the engine: {type(exc).__name__}: {exc}\n\n"
-                "If this is about the verifier, either install torch "
-                "(`pip install -r requirements.txt`) or set "
-                "`PRAMAAN_VERIFIER_BACKEND=llm` with an `ANTHROPIC_API_KEY`."
+                "If this is about the verifier, install torch "
+                "(`pip install -r requirements.txt`), or set "
+                "`PRAMAAN_VERIFIER_BACKEND=llm` with an LLM key set."
             )
             return
         with st.spinner("Retrieving clauses, drafting, verifying…"):

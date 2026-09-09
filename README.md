@@ -122,7 +122,17 @@ sentences it checks, so PRAMAAN takes whichever provider you can get:
 | OpenAI-compatible | OpenRouter free models, local Ollama, LM Studio | free |
 | Anthropic | console.anthropic.com | paid |
 
-Put one in `.env` and PRAMAAN detects it. Retrieval, citations and the
+Put one in a file called `.env` in this folder (same level as `app.py`):
+
+```
+GROQ_API_KEY=gsk_your_key_here
+```
+
+`pramaan/__init__.py` loads that file into the environment before anything reads
+config, so nothing else needs configuring. On Streamlit Cloud there is no `.env`
+-- put the same line in **Settings -> Secrets** instead, as TOML, and `app.py`
+copies it across. The sidebar shows which provider it detected, so you can tell
+at a glance whether the key was picked up. Retrieval, citations and the
 verification gate are **all local and cost nothing** -- only drafting needs a
 provider.
 
