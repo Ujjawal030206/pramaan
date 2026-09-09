@@ -2,7 +2,9 @@
 __pycache__/
 *.pyc
 .env
-index/
+# index/ is committed on purpose: Streamlit Community Cloud cannot run the
+# build step at boot, and it is only ~750 KB.
+# index/
 corpus/raw/
 eval/results.json
 .streamlit/secrets.toml
