@@ -6,5 +6,5 @@ __pycache__/
 # build step at boot, and it is only ~750 KB.
 # index/
 corpus/raw/
-eval/results.json
+eval/results*.json
 .streamlit/secrets.toml
