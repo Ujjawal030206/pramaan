@@ -139,20 +139,39 @@ def _post(url: str, payload: dict, headers: dict) -> dict:
 
 def _chat_openai_compatible(system: str, user: str, *, key: str, base_url: str,
                             model: str, max_tokens: int) -> str:
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    # gpt-oss are reasoning models: they spend the token budget thinking before
+    # they write anything, and if thinking exhausts it the reply comes back with
+    # an empty `content` and a populated `reasoning`. We do not use the reasoning
+    # trace, so cap it -- this also roughly halves latency.
+    if "gpt-oss" in model:
+        payload["reasoning_effort"] = "low"
+
     data = _post(
         f"{base_url.rstrip('/')}/chat/completions",
-        {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": 0,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
+        payload,
         {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
-    return data["choices"][0]["message"]["content"].strip()
+    choice = data["choices"][0]
+    text = (choice["message"].get("content") or "").strip()
+    if not text:
+        # Never let this look like "the documents do not settle it". An empty
+        # completion is a provider problem, and reporting it as an honest
+        # abstention is the one lie this system must not tell.
+        raise RuntimeError(
+            f"{model} returned no content (finish_reason="
+            f"{choice.get('finish_reason')!r}); the token budget was probably "
+            "consumed by reasoning. Raise DRAFT_MAX_TOKENS or lower reasoning_effort."
+        )
+    return text
 
 
 def _chat_gemini(system: str, user: str, *, key: str, model: str,
