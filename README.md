@@ -316,6 +316,55 @@ misses land at ranks 9 and 10, which is why `TOP_K` is 10 rather than 6.
 The gate itself, measured on real clause text by `tests/test_gate_nli.py`:
 supported claims score **0.95–0.99**, fabricated ones **0.00–0.01**.
 
+**4. A fast gate is a trap.** Judging entailment with the LLM instead of the
+local classifier is 20x faster and looks fine question by question. Across the
+whole eval set it collapses:
+
+| gate | overall accuracy | answers the 7 it should | refuses the 6 it should | median |
+|---|---|---|---|---|
+| local NLI (default) | **92.3%** | 6 / 7 | 6 / 6 | 11.3s |
+| LLM-judged | 53.8% | **1 / 7** | 6 / 6 | 0.6s |
+
+The LLM judge abstains on 92% of everything -- perfect on abstention precision,
+useless in practice. That degenerate strategy is exactly what the split
+answerable/unanswerable eval set exists to expose, and why catch-rate is never
+reported alone.
+
+Measured on the 13-question set with the local NLI gate:
+
+| Metric | Value |
+|---|---|
+| Verification catch-rate | 40.0% |
+| Abstention rate | 53.8% |
+| Citation coverage | 100% |
+| Answer rate (answerable) | 85.7% -- 6 of 7 |
+| Abstention precision (unanswerable) | 100% -- 6 of 6 |
+| Overall accuracy | 92.3% |
+| Median latency | 11.3s |
+
+**5. The gate is sensitive to phrasing, not only meaning.** Our sharpest
+limitation, and the cause of the single eval miss. Against the PM-KISAN
+definition clause, four true and equivalent sentences score:
+
+| Sentence (all true, all equivalent) | Entailment |
+|---|---|
+| "The family covered by PM-KISAN is husband, wife and minor children." | 0.793 |
+| "...is a family comprising husband, wife and minor children..." | 0.548 |
+| "A farmer's family means husband, wife and minor children." | 0.218 |
+| "Husband, wife and minor children are covered by the definition of family." | 0.020 |
+
+A true sentence can be deleted for how it happens to be worded.
+
+Two fixes considered and rejected on evidence. Scoring both directions does not
+help -- reverse entailment is ~0.005 on all of the above. And lowering the
+threshold is unsafe: an *inverted* claim ("persons who paid income tax **are**
+eligible", against the clause saying they are not) scores 0.370, so dropping the
+bar to rescue a 0.46 true sentence would start admitting false ones. 0.5 stays.
+
+We prefer this failure direction. A deleted true sentence costs coverage; an
+admitted false one costs someone a wasted day and a journey to a government
+office.
+
 ## Honest limitations
 
 - **Retrieval is the ceiling.** If the right clause is not retrieved, we abstain.
