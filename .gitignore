@@ -8,3 +8,7 @@ __pycache__/
 corpus/raw/
 eval/results*.json
 .streamlit/secrets.toml
+
+# Local build artefacts, not part of the source
+demo/
+scripts/record_demo.py
