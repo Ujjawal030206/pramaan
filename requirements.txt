@@ -1,7 +1,8 @@
 # Core
 streamlit>=1.40
-# Optional: only needed for the paid Anthropic backend.
-anthropic>=0.40
+# Optional: only needed for the paid Anthropic backend. Left out by default so
+# a deploy does not pull an SDK it never calls -- drafter.py imports it lazily.
+# anthropic>=0.40
 pypdf>=5.0
 pyyaml>=6.0
 requests>=2.31
@@ -21,5 +22,8 @@ protobuf>=4.0
 # numpy dot product if this is absent, which is fine at our corpus size.
 faiss-cpu>=1.8; platform_system != "Darwin" or platform_machine != "arm64"
 
-# Optional: voice input. Omit to run text-only.
-faster-whisper>=1.0
+# Optional: voice input. Deliberately NOT installed. Voice was dropped from the
+# deck, and leaving this active meant a fresh deploy would install it and render
+# a microphone the presentation never mentions. Uncomment only if you put voice
+# back on the slides.
+# faster-whisper>=1.0

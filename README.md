@@ -1,3 +1,14 @@
+---
+title: PRAMAAN
+emoji: 🪔
+colorFrom: purple
+colorTo: yellow
+sdk: streamlit
+app_file: app.py
+pinned: false
+short_description: The AI advisor that refuses to guess.
+---
+
 # PRAMAAN
 
 **The AI advisor that refuses to guess.**
@@ -199,32 +210,56 @@ done
 Pick the value that maximises abstention precision without collapsing the
 answer rate. Do not tune it on the demo questions you plan to show judges.
 
-## Deploying to Streamlit Community Cloud
+## Deploying
 
-1. Push this repo to GitHub.
-2. On share.streamlit.io, point a new app at `app.py`.
-3. In **Settings → Secrets**, add:
-   ```toml
-   GROQ_API_KEY = "gsk_..."
+The app holds two transformer models resident and needs **~1.7 GB of RAM** once
+it has answered a question (measured, not estimated). That number rules most
+free hosts out:
+
+| Host | Free RAM | Runs Streamlit | Verdict |
+|---|---|---|---|
+| Vercel | n/a | no -- serverless, no persistent websocket | won't run at all |
+| Render | 512 MB | yes | 3x short of RAM |
+| Streamlit Community Cloud | ~1 GB | yes, natively | likely OOMs on boot |
+| **Hugging Face Spaces** | **16 GB** | yes, natively | **use this** |
+
+Vercel is doubly out: its Hobby serverless bundle caps at 250 MB against our
+1.3 GB of dependencies, and its 10s function timeout is shorter than our 12.7s
+median answer.
+
+### Hugging Face Spaces (recommended)
+
+1. huggingface.co -> **New Space** -> SDK **Streamlit**, hardware **CPU basic (free)**.
+2. Push this repo to the Space remote:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<user>/pramaan
+   git push space main
    ```
-4. **The free tier is ~1 GB and will probably not hold torch plus two
-   transformer models.** If the app is killed on boot, rename
-   `requirements-cloud.txt` to `requirements.txt` and add to Secrets:
-   ```toml
-   PRAMAAN_RETRIEVAL_MODE = "lexical"
-   PRAMAAN_VERIFIER_BACKEND = "llm"
-   ```
-   That drops the encoder and the local NLI model entirely: retrieval becomes
-   BM25-only and the gate is judged by the LLM. Both are measurably worse than
-   the full stack, so demo locally if you can and say plainly which mode the
-   hosted version is running.
+3. Space **Settings -> Variables and secrets -> New secret**: `GROQ_API_KEY`.
+4. First build takes ~10 minutes (torch is a large download) and the first
+   question downloads ~850 MB of models. Both are cached afterwards.
 
-   Do **not** just change `PRAMAAN_EMBED_MODEL` to something smaller — the
-   committed vectors were built with one specific encoder, and mixing them
-   silently corrupts retrieval. The retriever now refuses to start if you try.
+The YAML block at the top of this README is the Space configuration; leave it
+in place.
 
-Note that `index/` and `corpus/raw/` are gitignored. Either commit the built
-index, or add a first-run hook that calls the two scripts.
+Free Spaces sleep after ~48h idle and take ~30s to wake, so open the link once
+before a demo.
+
+### Streamlit Community Cloud (fallback)
+
+Works the same way -- point it at `app.py`, put `GROQ_API_KEY` in
+**Settings -> Secrets** as TOML. If it is killed on boot, swap
+`requirements-cloud.txt` in for `requirements.txt` and set:
+```toml
+PRAMAAN_RETRIEVAL_MODE = "lexical"
+PRAMAAN_VERIFIER_BACKEND = "llm"
+```
+That fits in 1 GB but runs the degraded stack -- BM25-only retrieval and an
+LLM-judged gate, which the eval scores at 53.8% against 92.3%. Prefer Spaces.
+
+Do **not** just point `PRAMAAN_EMBED_MODEL` at a smaller encoder: the committed
+vectors were built with one specific model and mixing them silently corrupts
+retrieval. The retriever refuses to start if you try.
 
 ## Layout
 
