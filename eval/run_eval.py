@@ -51,6 +51,9 @@ def main() -> int:
         v = out.verification
         kept = len(v.kept) if v else 0
         cited = sum(1 for s in (v.kept if v else []) if s.clause is not None)
+        # Separates the two ways a sentence dies, so a drop in accuracy can be
+        # pinned on the contradiction veto or on plain low entailment.
+        vetoed = sum(1 for s in (v.verdicts if v else []) if s.contradicted_by is not None)
         correct = (expect == "abstain") == out.abstained
 
         rows.append({
@@ -62,6 +65,7 @@ def main() -> int:
             "kept": kept,
             "blocked": len(v.stripped) if v else 0,
             "cited": cited,
+            "vetoed": vetoed,
             "catch_rate": out.catch_rate,
             "answer": out.answer if not out.abstained else "",
             "elapsed": round(out.elapsed, 2),
@@ -69,7 +73,7 @@ def main() -> int:
         flag = "ok " if correct else "MISS"
         print(f"[{i:>2}/{len(spec)}] {flag} expect={expect:<7} "
               f"abstained={str(out.abstained):<5} "
-              f"kept={kept}/{len(v.verdicts) if v else 0}  {q[:56]}")
+              f"kept={kept}/{len(v.verdicts) if v else 0} vetoed={vetoed}  {q[:50]}")
 
     answerable = [r for r in rows if r["expect"] == "answer"]
     unanswerable = [r for r in rows if r["expect"] == "abstain"]

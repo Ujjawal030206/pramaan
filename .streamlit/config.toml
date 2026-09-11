@@ -1,6 +1,18 @@
 [theme]
-base = "light"
-primaryColor = "#B34700"
+base = "dark"
+primaryColor = "#7C5CFF"
+backgroundColor = "#0B0D12"
+secondaryBackgroundColor = "#141821"
+textColor = "#E6E8EE"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
 
 [server]
 maxUploadSize = 10
+# Streamlit's watcher walks every loaded module looking for source files to
+# hot-reload. With transformers loaded that means touching thousands of lazy
+# model modules, which fails noisily (they want torchvision) and burns CPU
+# the verifier needs. Nothing here is edited live, so switch it off.
+fileWatcherType = "none"

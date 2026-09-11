@@ -319,3 +319,30 @@ def judge_entailment(premises: list[str], hypothesis: str) -> list[float]:
         return out
     except Exception:
         return [0.0] * len(premises)
+
+
+# ---------------------------------------------------------------- comparison
+RAW_SYSTEM = (
+    "You are a helpful general-purpose assistant. Answer the user's question "
+    "about Indian government welfare schemes directly and helpfully, the way a "
+    "typical chatbot would. Plain sentences only: no markdown, no bullet points, "
+    "no headings. 120 words maximum."
+)
+
+
+def raw_answer(question: str) -> str:
+    """The same model, with no documents and no gate: the baseline PRAMAAN is
+    shown against.
+
+    Deliberately not handicapped. It gets an ordinary helpful prompt, because a
+    comparison rigged to make the baseline fail would prove nothing -- and a
+    judge who tried the same question in a real chatbot would notice.
+    """
+    if detect_provider() == "extractive":
+        raise RuntimeError(
+            "the comparison needs an LLM key; there is no plain chatbot to ask"
+        )
+    text = chat(RAW_SYSTEM, question)
+    text = re.sub(r"[*_#`]+", "", text)
+    text = re.sub(r"^\s*(?:[-•]|\d+[.)])\s+", "", text, flags=re.M)
+    return re.sub(r"\s+", " ", text).strip()

@@ -89,6 +89,16 @@ MIN_SURVIVING_FRACTION = float(os.getenv("PRAMAAN_MIN_SURVIVING_FRACTION", "0.34
 # given to the drafter. Set to 0 to make the gate trust the drafting retrieval.
 VERIFY_TIME_K = int(os.getenv("PRAMAAN_VERIFY_TIME_K", "5"))
 
+# Evidence that refutes a sentence overrides evidence that merely supports it.
+# Found through the side-by-side comparison: "paying income tax does not
+# disqualify you from PM-KISAN" scored 0.95 entailment against an unrelated
+# PM-KMY enrolment clause while the actual income-tax exclusion contradicted it
+# at 0.90 -- and the gate, reading only entailment, marked it supported. The
+# same forward pass yields the contradiction score, so the veto costs nothing.
+# 0.85, not 0.8: a TRUE rewording of the income-tax rule reached 0.797
+# contradiction, while the false claim that motivated the veto sat at 0.902.
+CONTRADICTION_VETO = float(os.getenv("PRAMAAN_CONTRADICTION_VETO", "0.85"))
+
 # The cross-encoder costs ~2-3s per premise on CPU, so running it over every
 # retrieved clause made a single answer take 30-45s. Cheap embedding similarity
 # picks the few premises actually worth checking; the correct clause is nearly

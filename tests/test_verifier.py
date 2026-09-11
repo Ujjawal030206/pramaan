@@ -117,6 +117,42 @@ def test_empty_clause_list_abstains():
     assert res.abstained
 
 
+
+class NLIStub:
+    """Returns entailment AND contradiction, like the real NLI verifier."""
+
+    name = "stub-nli"
+
+    def __init__(self, ent: float, con: float):
+        self.ent, self.con = ent, con
+
+    def entailment_scores(self, premises, hypothesis):
+        return [self.ent for _ in premises]
+
+    def nli_scores(self, premises, hypothesis):
+        return [self.ent for _ in premises], [self.con for _ in premises]
+
+
+def test_contradiction_vetoes_support():
+    """A sentence one clause entails but another refutes must not survive."""
+    res = verify(
+        "Paying income tax does not disqualify you from the scheme.",
+        [clause("Persons who paid income tax shall not be eligible.")],
+        verifier=NLIStub(ent=0.95, con=0.90), min_surviving=0.0,
+    )
+    assert not res.verdicts[0].supported
+    assert res.verdicts[0].contradiction >= 0.9
+    assert res.verdicts[0].contradicted_by is not None
+
+
+def test_weak_contradiction_does_not_veto():
+    res = verify(
+        "Alpha claim here.",
+        [clause("Alpha is documented.")],
+        verifier=NLIStub(ent=0.95, con=0.10),
+    )
+    assert res.verdicts[0].supported
+
 if __name__ == "__main__":
     import traceback
 

@@ -365,6 +365,28 @@ We prefer this failure direction. A deleted true sentence costs coverage; an
 admitted false one costs someone a wasted day and a journey to a government
 office.
 
+**6. Refutation must outrank support -- but only relevant refutation.** The
+side-by-side comparison exposed a false positive: asked about income tax, a plain
+chatbot wrote "paying income tax does not automatically disqualify you from
+PM-KISAN". The gate scored it 0.952 *supported* -- entailed by an unrelated
+PM-KMY enrolment clause -- while the actual income-tax exclusion contradicted it
+at 0.902. The gate was reading entailment and ignoring contradiction.
+
+A first veto (any clause contradicting at 0.85+ deletes the sentence) caught it,
+but also deleted true sentences: off-topic clauses from other schemes "contradicted"
+correct PM-KISAN facts, and one eval question failed outright. The fix that held:
+**only a clause at least as relevant as the supporting clause may veto it.** The
+false claim is refuted by the most relevant clause there is, so it is still caught;
+cross-scheme noise can no longer veto. On the 13-question eval the bounded veto
+fires on zero correct answers.
+
+**7. The eval is noisier than one number suggests.** Groq's drafts vary from run to
+run even at temperature 0, so the same gate has scored 92.3%, 100%, 92.3% and 76.9%
+across four runs of the 13-question set (mean about 90%). Refusal is the stable
+part -- **6 of 6 unanswerable questions refused on every run**. The variance is on
+the answering side, where a differently-worded draft can fall just under the
+threshold. Treat any single figure as one sample.
+
 ## Honest limitations
 
 - **Retrieval is the ceiling.** If the right clause is not retrieved, we abstain.
