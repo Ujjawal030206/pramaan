@@ -16,7 +16,7 @@ short_description: The AI advisor that refuses to guess.
 Proof-grounded eligibility guidance for Indian government welfare schemes.
 
 Built for **CodeArambh 2.0** · Domain: AI/ML
-Team Pramaan — Ujjawal Srivastava (lead), Amey Dongre, Tejas Gupta
+Team Techtonics — Ujjawal Srivastava (lead), Amey Dongre, Tejas Gupta
 
 ---
 
@@ -142,7 +142,7 @@ GROQ_API_KEY=gsk_your_key_here
 `pramaan/__init__.py` loads that file into the environment before anything reads
 config, so nothing else needs configuring. On Streamlit Cloud there is no `.env`
 -- put the same line in **Settings -> Secrets** instead, as TOML, and `app.py`
-copies it across. The sidebar shows which provider it detected, so you can tell
+copies it across. The page footer shows which provider it detected, so you can tell
 at a glance whether the key was picked up. Retrieval, citations and the
 verification gate are **all local and cost nothing** -- only drafting needs a
 provider.
